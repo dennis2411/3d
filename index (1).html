@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D print kosten</title>
+<style>
+  :root { --bg:#000; --fg:#fff; --dim:#9a9a9a; --line:#3a3a3a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg);
+    font-family: "Helvetica Neue", Arial, sans-serif; line-height:1.5; }
+  body { min-height:100vh; padding:32px 20px 64px; }
+  main { max-width:560px; margin:0 auto; }
+  h1 { font-size:1.6rem; font-weight:600; margin:0 0 24px; }
+  h2 { font-size:1.05rem; font-weight:600; margin:0 0 12px; }
+  label { display:block; font-size:.9rem; color:var(--dim); margin:14px 0 4px; }
+  input { width:100%; padding:12px; font-size:1rem; color:var(--fg); background:var(--bg);
+    border:1px solid var(--line); border-radius:6px; }
+  input:focus, button:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+  button { font:inherit; cursor:pointer; padding:12px 18px; border-radius:6px;
+    border:1px solid var(--fg); background:var(--fg); color:var(--bg); font-weight:600; }
+  button.ghost { background:transparent; color:var(--fg); border-color:var(--line); }
+  button.ghost:hover { border-color:var(--fg); }
+  .item { border:1px solid var(--line); border-radius:8px; padding:16px; margin-top:20px; }
+  .item-head { display:flex; justify-content:space-between; align-items:center; }
+  .item-head button { padding:6px 12px; font-size:.85rem; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; }
+  .error { color:var(--fg); margin-top:12px; min-height:1.4em; }
+  #login { max-width:340px; margin:20vh auto 0; }
+  #result { margin-top:32px; border-top:1px solid var(--line); padding-top:24px; }
+  #result ul { padding-left:20px; margin:8px 0 20px; }
+  .cost { display:flex; justify-content:space-between; padding:4px 0; }
+  .cost.total { border-top:1px solid var(--line); margin-top:8px; padding-top:10px; font-weight:700; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<section id="login">
+  <h1>Inloggen</h1>
+  <label for="code">Code</label>
+  <input id="code" type="password" inputmode="numeric" autocomplete="off">
+  <div class="actions"><button id="loginBtn" type="button">Inloggen</button></div>
+  <div class="error" id="loginError" role="alert"></div>
+</section>
+
+<main id="app" hidden>
+  <h1>3D print kosten</h1>
+
+  <label for="naam">Naam</label>
+  <input id="naam" type="text" autocomplete="off">
+
+  <div id="items"></div>
+
+  <div class="actions">
+    <button class="ghost" id="addBtn" type="button">Extra artikel toevoegen</button>
+    <button id="calcBtn" type="button">Bereken</button>
+  </div>
+
+  <div id="result" hidden></div>
+</main>
+
+<script>
+(function () {
+  // Instellingen
+  var CODE = "1234";
+  var KW = 0.145;            // kW verbruik van de printer
+  var PRIJS_KWH = 0.21751;   // € per kWh
+  var PRIJS_KG = 12;         // € per 1000 gram
+  var MAIL_KEY = "619811cc-cbfb-4f8a-9cc1-b802e366b3a6"; // Web3Forms access key
+
+  var $ = function (id) { return document.getElementById(id); };
+  var eur = function (n) {
+    return "€ " + n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  var num = function (v) {
+    var n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+  var esc = function (s) {
+    return s.replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+
+  // Inloggen
+  function showApp() {
+    $("login").hidden = true;
+    $("app").hidden = false;
+    if (!$("items").children.length) addItem();
+  }
+  function login() {
+    if ($("code").value === CODE) {
+      try { sessionStorage.setItem("ok", "1"); } catch (e) {}
+      showApp();
+    } else {
+      $("loginError").textContent = "Code klopt niet. Probeer opnieuw.";
+      $("code").value = "";
+      $("code").focus();
+    }
+  }
+  $("loginBtn").addEventListener("click", login);
+  $("code").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
+  try { if (sessionStorage.getItem("ok") === "1") showApp(); } catch (e) {}
+
+  // Artikelen
+  var count = 0;
+  function addItem() {
+    count++;
+    var div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML =
+      '<div class="item-head"><h2>Artikel</h2>' +
+      (count > 1 ? '<button type="button" class="ghost remove">Verwijderen</button>' : '') +
+      '</div>' +
+      '<label>Artikel</label><input type="text" class="f-art" autocomplete="off">' +
+      '<div class="row">' +
+        '<div><label>Gewicht (gram)</label><input type="text" inputmode="decimal" class="f-gram"></div>' +
+        '<div><label>Tijd (uur)</label><input type="text" inputmode="decimal" class="f-uur"></div>' +
+      '</div>';
+    var rm = div.querySelector(".remove");
+    if (rm) rm.addEventListener("click", function () { div.remove(); });
+    $("items").appendChild(div);
+    if (count > 1) div.querySelector(".f-art").focus();
+  }
+  $("addBtn").addEventListener("click", addItem);
+
+  // Berekenen
+  function calc() {
+    var naam = $("naam").value.trim() || "Zonder naam";
+    var lijst = [], energie = 0, filament = 0;
+
+    Array.prototype.forEach.call($("items").children, function (el, i) {
+      var art = el.querySelector(".f-art").value.trim() || ("Artikel " + (i + 1));
+      var gram = num(el.querySelector(".f-gram").value);
+      var uur = num(el.querySelector(".f-uur").value);
+      var e = uur * KW * PRIJS_KWH;
+      var f = gram / 1000 * PRIJS_KG;
+      energie += e; filament += f;
+      lijst.push({ art: art, prijs: e + f });
+    });
+
+    var html = "<h2>" + esc(naam) + "</h2><ul>";
+    lijst.forEach(function (x) { html += "<li>" + esc(x.art) + " (" + eur(x.prijs) + ")</li>"; });
+    html += "</ul><h2>Kosten:</h2>" +
+      '<div class="cost"><span>Energie</span><span>' + eur(energie) + "</span></div>" +
+      '<div class="cost"><span>Filament</span><span>' + eur(filament) + "</span></div>" +
+      '<div class="cost total"><span>Totaal</span><span>' + eur(energie + filament) + "</span></div>";
+
+    $("result").innerHTML = html;
+    $("result").hidden = false;
+    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    var tekst = naam + "\n\n";
+    lijst.forEach(function (x) { tekst += "* " + x.art + " (" + eur(x.prijs) + ")\n"; });
+    tekst += "\nKosten:\nEnergie: " + eur(energie) +
+             "\nFilament: " + eur(filament) +
+             "\nTotaal: " + eur(energie + filament) + "\n";
+    sendMail(naam, tekst);
+  }
+
+  // E-mail naar jezelf (Web3Forms, gratis) - werkt stil op de achtergrond
+  function sendMail(naam, tekst) {
+    if (!MAIL_KEY) return;
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        access_key: MAIL_KEY,
+        subject: "3D print kosten: " + naam,
+        from_name: "3D print kosten",
+        message: tekst
+      })
+    }).catch(function () {});
+  }
+
+  $("calcBtn").addEventListener("click", calc);
+})();
+</script>
+</body>
+</html>
