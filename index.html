@@ -32,6 +32,7 @@
   #result ul { padding-left:20px; margin:8px 0 20px; }
   .cost { display:flex; justify-content:space-between; padding:4px 0; }
   .cost.total { border-top:1px solid var(--line); margin-top:8px; padding-top:10px; font-weight:700; }
+  .cost.prijs { font-weight:700; }
   strong { font-weight:800; }
   .line { margin:0 0 6px; }
   [hidden] { display:none !important; }
@@ -70,6 +71,7 @@
   var KW = 0.145;            // kW verbruik van de printer
   var PRIJS_KWH = 0.21751;   // € per kWh
   var PRIJS_KG = 12;         // € per 1000 gram
+  var OPSLAG = 1.2;          // kosten + 20% = verkoopprijs
   var MAIL_KEY = "619811cc-cbfb-4f8a-9cc1-b802e366b3a6"; // Web3Forms access key
 
   var $ = function (id) { return document.getElementById(id); };
@@ -143,13 +145,17 @@
       lijst.push({ art: art, prijs: e + f });
     });
 
+    var totaal = energie + filament;
+    var prijs = totaal * OPSLAG;
+
     var label = lijst.length === 1 ? "Artikel" : "Artikelen";
     var html = "<p class=\"line\"><strong>Naam:</strong> " + esc(naam) + "</p><p class=\"line\"><strong>" + label + ":</strong></p><ul>";
     lijst.forEach(function (x) { html += "<li>" + esc(x.art) + " (" + eur(x.prijs) + ")</li>"; });
     html += "</ul><p class=\"line\"><strong>Kosten:</strong></p>" +
       '<div class="cost"><span>Energie</span><span>' + eur(energie) + "</span></div>" +
       '<div class="cost"><span>Filament</span><span>' + eur(filament) + "</span></div>" +
-      '<div class="cost total"><span>Totaal</span><span>' + eur(energie + filament) + "</span></div>";
+      '<div class="cost total"><span>Totaal</span><span>' + eur(totaal) + "</span></div>" +
+      '<div class="cost prijs"><span>Prijs</span><span>' + eur(prijs) + "</span></div>";
 
     $("result").innerHTML = html;
     $("result").hidden = false;
@@ -159,7 +165,8 @@
     lijst.forEach(function (x) { tekst += "* " + x.art + " (" + eur(x.prijs) + ")\n"; });
     tekst += "\nKosten:\nEnergie: " + eur(energie) +
              "\nFilament: " + eur(filament) +
-             "\nTotaal: " + eur(energie + filament) + "\n";
+             "\nTotaal: " + eur(totaal) +
+             "\nPrijs: " + eur(prijs) + "\n";
     sendMail(naam, tekst);
   }
 
