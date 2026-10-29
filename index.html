@@ -26,8 +26,6 @@
   .item-head button { padding:6px 12px; font-size:.85rem; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; }
-  .error { color:var(--fg); margin-top:12px; min-height:1.4em; }
-  #login { max-width:340px; margin:20vh auto 0; }
   #result { margin-top:32px; border-top:1px solid var(--line); padding-top:24px; }
   #result ul { padding-left:20px; margin:8px 0 20px; }
   .cost { display:flex; justify-content:space-between; padding:4px 0; }
@@ -40,15 +38,7 @@
 </head>
 <body>
 
-<section id="login">
-  <h1>Inloggen</h1>
-  <label for="code">Code</label>
-  <input id="code" type="password" inputmode="numeric" autocomplete="off">
-  <div class="actions"><button id="loginBtn" type="button">Inloggen</button></div>
-  <div class="error" id="loginError" role="alert"></div>
-</section>
-
-<main id="app" hidden>
+<main id="app">
   <h1>3D print kosten</h1>
 
   <label for="naam">Naam</label>
@@ -67,7 +57,6 @@
 <script>
 (function () {
   // Instellingen
-  var CODE = "1234";
   var KW = 0.145;            // kW verbruik van de printer
   var PRIJS_KWH = 0.21751;   // € per kWh
   var PRIJS_KG = 12;         // € per 1000 gram
@@ -87,26 +76,6 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   };
-
-  // Inloggen
-  function showApp() {
-    $("login").hidden = true;
-    $("app").hidden = false;
-    if (!$("items").children.length) addItem();
-  }
-  function login() {
-    if ($("code").value === CODE) {
-      try { sessionStorage.setItem("ok", "1"); } catch (e) {}
-      showApp();
-    } else {
-      $("loginError").textContent = "Code klopt niet. Probeer opnieuw.";
-      $("code").value = "";
-      $("code").focus();
-    }
-  }
-  $("loginBtn").addEventListener("click", login);
-  $("code").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
-  try { if (sessionStorage.getItem("ok") === "1") showApp(); } catch (e) {}
 
   // Artikelen
   var count = 0;
@@ -129,6 +98,7 @@
     if (count > 1) div.querySelector(".f-art").focus();
   }
   $("addBtn").addEventListener("click", addItem);
+  addItem();
 
   // Berekenen
   function calc() {
