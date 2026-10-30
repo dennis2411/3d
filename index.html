@@ -59,8 +59,8 @@
   // Instellingen
   var KW = 0.145;            // kW verbruik van de printer
   var PRIJS_KWH = 0.21751;   // € per kWh
-  var PRIJS_KG = 13.50;         // € per 1000 gram
-  var OPSLAG = 4;          // kosten + 20% = verkoopprijs
+  var PRIJS_KG = 13.50;      // € per 1000 gram
+  var OPSLAG = 4;            // verkoopprijs = kosten x 4
   var MAIL_KEY = "619811cc-cbfb-4f8a-9cc1-b802e366b3a6"; // Web3Forms access key
 
   var $ = function (id) { return document.getElementById(id); };
@@ -101,14 +101,16 @@
   addItem();
 
   // Berekenen
+  var laatsteMail = "";
   function calc() {
     var naam = $("naam").value.trim() || "Zonder naam";
-    var lijst = [], energie = 0, filament = 0;
+    var lijst = [], energie = 0, filament = 0, heeftInvoer = false;
 
     Array.prototype.forEach.call($("items").children, function (el, i) {
       var art = el.querySelector(".f-art").value.trim() || ("Artikel " + (i + 1));
       var gram = num(el.querySelector(".f-gram").value);
       var uur = num(el.querySelector(".f-uur").value);
+      if (gram > 0 || uur > 0) heeftInvoer = true;
       var e = uur * KW * PRIJS_KWH;
       var f = gram / 1000 * PRIJS_KG;
       energie += e; filament += f;
@@ -137,7 +139,12 @@
              "\nFilament: " + eur(filament) +
              "\nTotaal: " + eur(totaal) +
              "\nPrijs: " + eur(prijs) + "\n";
-    sendMail(naam, tekst);
+
+    // Alleen mailen bij ingevulde waarden en niet twee keer dezelfde berekening
+    if (heeftInvoer && tekst !== laatsteMail) {
+      laatsteMail = tekst;
+      sendMail(naam, tekst);
+    }
   }
 
   // E-mail naar jezelf (Web3Forms, gratis) - werkt stil op de achtergrond
