@@ -12,27 +12,44 @@
   body { min-height:100vh; padding:32px 20px 64px; }
   main { max-width:560px; margin:0 auto; }
   h1 { font-size:1.6rem; font-weight:600; margin:0 0 24px; }
-  h2 { font-size:1.05rem; font-weight:600; margin:0 0 12px; }
+  h2 { font-size:1.05rem; font-weight:600; margin:0; }
+  strong { font-weight:800; }
   label { display:block; font-size:.9rem; color:var(--dim); margin:14px 0 4px; }
-  input { width:100%; padding:12px; font-size:1rem; color:var(--fg); background:var(--bg);
-    border:1px solid var(--line); border-radius:6px; }
-  input:focus, button:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+  input[type=text], input[type=password] { width:100%; padding:12px; font-size:1rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:6px; }
+  input:focus, button:focus-visible, .drop:focus-within { outline:2px solid var(--fg); outline-offset:2px; }
   button { font:inherit; cursor:pointer; padding:12px 18px; border-radius:6px;
     border:1px solid var(--fg); background:var(--fg); color:var(--bg); font-weight:600; }
   button.ghost { background:transparent; color:var(--fg); border-color:var(--line); }
   button.ghost:hover { border-color:var(--fg); }
+
+  .tabs { display:flex; margin-top:24px; border-bottom:1px solid var(--line); }
+  .tab { flex:1; background:transparent; color:var(--dim); border:0; border-bottom:2px solid transparent;
+    border-radius:0; padding:12px 8px; font-weight:600; }
+  .tab[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--fg); }
+
   .item { border:1px solid var(--line); border-radius:8px; padding:16px; margin-top:20px; }
   .item-head { display:flex; justify-content:space-between; align-items:center; }
   .item-head button { padding:6px 12px; font-size:.85rem; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; }
+
+  .hint { color:var(--dim); font-size:.9rem; margin:16px 0 0; }
+  .drop { display:block; margin-top:16px; padding:28px 16px; text-align:center; cursor:pointer;
+    border:1px dashed var(--dim); border-radius:8px; color:var(--fg); font-size:1rem; }
+  .drop.over { border-color:var(--fg); background:#111; }
+  .drop small { display:block; color:var(--dim); margin-top:4px; }
+  .shot-body { display:flex; gap:12px; margin-top:12px; align-items:flex-start; }
+  .thumb { width:84px; height:150px; object-fit:cover; border-radius:6px; border:1px solid var(--line); flex:none; }
+  .shot-fields { flex:1; min-width:0; }
+  .shot-fields label:first-of-type { margin-top:0; }
+  .shot-status { color:var(--dim); font-size:.85rem; margin-bottom:8px; }
+
   #result { margin-top:32px; border-top:1px solid var(--line); padding-top:24px; }
   #result ul { padding-left:20px; margin:8px 0 20px; }
+  .line { margin:0 0 6px; }
   .cost { display:flex; justify-content:space-between; padding:4px 0; }
   .cost.total { border-top:1px solid var(--line); margin-top:8px; padding-top:10px; font-weight:700; }
-  .cost.prijs { font-weight:700; }
-  strong { font-weight:800; }
-  .line { margin:0 0 6px; }
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -44,23 +61,44 @@
   <label for="naam">Naam</label>
   <input id="naam" type="text" autocomplete="off">
 
-  <div id="items"></div>
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab" id="tabManual" role="tab" aria-selected="true">Handmatig</button>
+    <button type="button" class="tab" id="tabShot" role="tab" aria-selected="false">Screenshot</button>
+  </div>
+
+  <section id="paneManual" role="tabpanel">
+    <div id="items"></div>
+    <div class="actions">
+      <button class="ghost" id="addBtn" type="button">Extra artikel toevoegen</button>
+    </div>
+  </section>
+
+  <section id="paneShot" role="tabpanel" hidden>
+    <p class="hint">Upload tot 10 screenshots uit je print-app. Gewicht en tijd worden uit de afbeelding gelezen. Dat gebeurt in je eigen browser, de afbeeldingen worden niet geüpload.</p>
+    <label class="drop" id="drop" for="file">
+      Tik om screenshots te kiezen
+      <small>of sleep ze hierheen (maximaal 10)</small>
+    </label>
+    <input id="file" type="file" accept="image/*" multiple hidden>
+    <p class="hint" id="shotMsg" role="status"></p>
+    <div id="shots"></div>
+  </section>
 
   <div class="actions">
-    <button class="ghost" id="addBtn" type="button">Extra artikel toevoegen</button>
     <button id="calcBtn" type="button">Bereken</button>
   </div>
 
   <div id="result" hidden></div>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 (function () {
-  // Instellingen
+  // ---------- Instellingen ----------
   var KW = 0.145;            // kW verbruik van de printer
-  var PRIJS_KWH = 0.32;   // € per kWh
-  var PRIJS_KG = 13.50;      // € per 1000 gram
-  var OPSLAG = 4;            // verkoopprijs = kosten x 4
+  var PRIJS_KWH = 0.21751;   // € per kWh
+  var PRIJS_KG = 12;         // € per 1000 gram
+  var MAX_SHOTS = 10;
   var MAIL_KEY = "619811cc-cbfb-4f8a-9cc1-b802e366b3a6"; // Web3Forms access key
 
   var $ = function (id) { return document.getElementById(id); };
@@ -71,13 +109,27 @@
     var n = parseFloat(String(v).replace(",", "."));
     return isNaN(n) || n < 0 ? 0 : n;
   };
+  var fmt = function (n) { return String(Math.round(n * 100) / 100).replace(".", ","); };
   var esc = function (s) {
     return s.replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   };
 
-  // Artikelen
+  // ---------- Tabbladen ----------
+  var active = "manual";
+  function setTab(t) {
+    active = t;
+    $("paneManual").hidden = t !== "manual";
+    $("paneShot").hidden = t !== "shot";
+    $("tabManual").setAttribute("aria-selected", t === "manual" ? "true" : "false");
+    $("tabShot").setAttribute("aria-selected", t === "shot" ? "true" : "false");
+    $("result").hidden = true;
+  }
+  $("tabManual").addEventListener("click", function () { setTab("manual"); });
+  $("tabShot").addEventListener("click", function () { setTab("shot"); });
+
+  // ---------- Tab 1: handmatig ----------
   var count = 0;
   function addItem() {
     count++;
@@ -100,34 +152,197 @@
   $("addBtn").addEventListener("click", addItem);
   addItem();
 
-  // Berekenen
-  var laatsteMail = "";
+  // ---------- Tab 2: screenshots ----------
+  // Gewicht uit tekst halen: eerst de regel met "Filament", anders het hoogste getal met "g".
+  function parseGrams(text) {
+    var lines = text.split(/\n/), m, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/filament/i.test(lines[i])) {
+        m = lines[i].match(/(\d+(?:[.,]\d+)?)\s*g\b/);
+        if (m) return num(m[1]);
+      }
+    }
+    var all = text.match(/(\d+(?:[.,]\d+)?)\s*g\b/g);
+    if (!all) return null;
+    var best = 0;
+    all.forEach(function (s) { var v = num(s); if (v > best) best = v; });
+    return best > 0 ? best : null;
+  }
+  // Tijd uit tekst halen: "1.6h", "1h 36m", "1u 36m" of "45m".
+  function parseTime(text) {
+    var m = text.match(/(\d+)\s*[hu]\s*(\d{1,2})\s*m(?![a-z])/i);
+    if (m) return (+m[1]) + (+m[2]) / 60;
+    m = text.match(/(\d+(?:[.,]\d+)?)\s*[hu]\b/i);
+    if (m) return num(m[1]);
+    m = text.match(/\b(\d{1,3})\s*m(?![a-z])/i);
+    if (m) return (+m[1]) / 60;
+    return null;
+  }
+
+  // Afbeelding klaarmaken voor tekstherkenning: verkleinen, grijs, donker -> licht.
+  // Gebruikt het voorbeeldplaatje dat al is geladen, zodat het bestand niet nog eens gelezen hoeft te worden.
+  function prep(img) {
+    return new Promise(function (resolve, reject) {
+      function go() {
+        if (!img.naturalWidth) { reject(new Error("afbeelding")); return; }
+        var scale = img.naturalWidth > 1600 ? 1600 / img.naturalWidth : 1;
+        var c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * scale);
+        c.height = Math.round(img.naturalHeight * scale);
+        var ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        try {
+          var d = ctx.getImageData(0, 0, c.width, c.height), p = d.data, sum = 0, i, g;
+          for (i = 0; i < p.length; i += 4) {
+            g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+            p[i] = p[i + 1] = p[i + 2] = g;
+            sum += g;
+          }
+          if (sum / (p.length / 4) < 128) {
+            for (i = 0; i < p.length; i += 4) { p[i] = p[i + 1] = p[i + 2] = 255 - p[i]; }
+          }
+          ctx.putImageData(d, 0, 0);
+        } catch (e) {}
+        resolve(c);
+      }
+      if (img.complete) { go(); return; }
+      img.addEventListener("load", go, { once: true });
+      img.addEventListener("error", function () { reject(new Error("afbeelding")); }, { once: true });
+    });
+  }
+
+  var workerP = null;
+  var LANG_PATH = "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int";
+  function getWorker() {
+    if (!workerP) {
+      workerP = Tesseract.createWorker("eng", 1, { langPath: LANG_PATH })
+        .catch(function () { return Tesseract.createWorker("eng"); })
+        .catch(function (e) { workerP = null; throw e; });
+    }
+    return workerP;
+  }
+  var queue = Promise.resolve();
+
+  function scan(card) {
+    var st = card.querySelector(".shot-status");
+    st.textContent = "Tekst lezen...";
+    if (typeof Tesseract === "undefined") {
+      delete card.dataset.busy;
+      st.textContent = "Automatisch lezen is niet beschikbaar. Vul gewicht en tijd zelf in.";
+      return Promise.resolve();
+    }
+    return prep(card.querySelector(".thumb"))
+      .then(function (canvas) {
+        return getWorker().then(function (w) { return w.recognize(canvas); });
+      })
+      .then(function (res) {
+        var text = (res && res.data && res.data.text) || "";
+        var g = parseGrams(text), t = parseTime(text);
+        if (g !== null) card.querySelector(".f-gram").value = fmt(g);
+        if (t !== null) card.querySelector(".f-uur").value = fmt(t);
+        st.textContent = (g !== null && t !== null)
+          ? "Gelezen. Controleer de waarden."
+          : "Niet alles gevonden. Vul aan wat ontbreekt.";
+      })
+      .catch(function (err) {
+        var d = err && (err.message || String(err));
+        st.textContent = "Lezen mislukt" + (d ? " (" + String(d).slice(0, 80) + ")" : "") +
+          ". Vul gewicht en tijd zelf in.";
+      })
+      .then(function () { delete card.dataset.busy; });
+  }
+
+  function addShot(file) {
+    var url = URL.createObjectURL(file);
+    var div = document.createElement("div");
+    div.className = "item";
+    div.dataset.busy = "1";
+    div.innerHTML =
+      '<div class="item-head"><h2>Screenshot</h2>' +
+      '<button type="button" class="ghost remove">Verwijderen</button></div>' +
+      '<div class="shot-body"><img class="thumb" alt="Screenshot">' +
+      '<div class="shot-fields">' +
+        '<div class="shot-status">In wachtrij...</div>' +
+        '<label>Artikel (optioneel)</label><input type="text" class="f-art" autocomplete="off">' +
+        '<div class="row">' +
+          '<div><label>Gewicht (gram)</label><input type="text" inputmode="decimal" class="f-gram"></div>' +
+          '<div><label>Tijd (uur)</label><input type="text" inputmode="decimal" class="f-uur"></div>' +
+        '</div>' +
+      '</div></div>';
+    div.querySelector(".thumb").src = url;
+    div.querySelector(".remove").addEventListener("click", function () {
+      URL.revokeObjectURL(url);
+      div.remove();
+      $("shotMsg").textContent = "";
+    });
+    $("shots").appendChild(div);
+    queue = queue.then(function () { return scan(div); });
+  }
+
+  function addFiles(files) {
+    var list = Array.prototype.slice.call(files).filter(function (f) { return /^image\//.test(f.type); });
+    var room = MAX_SHOTS - $("shots").children.length;
+    var msg = "";
+    if (list.length > room) {
+      msg = "Maximaal " + MAX_SHOTS + " screenshots. " + (list.length - room) + " niet toegevoegd.";
+      list = list.slice(0, Math.max(room, 0));
+    }
+    $("shotMsg").textContent = msg;
+    list.forEach(addShot);
+  }
+  $("file").addEventListener("change", function () {
+    addFiles(this.files);
+  });
+  $("drop").addEventListener("click", function () { $("file").value = ""; });
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  // ---------- Berekenen ----------
+  function say(msg) {
+    $("result").innerHTML = '<p class="line">' + esc(msg) + "</p>";
+    $("result").hidden = false;
+  }
+
   function calc() {
     var naam = $("naam").value.trim() || "Zonder naam";
-    var lijst = [], energie = 0, filament = 0, heeftInvoer = false;
+    var container = active === "manual" ? $("items") : $("shots");
+    var fallback = active === "manual" ? "Artikel " : "Screenshot ";
 
-    Array.prototype.forEach.call($("items").children, function (el, i) {
-      var art = el.querySelector(".f-art").value.trim() || ("Artikel " + (i + 1));
+    if (!container.children.length) {
+      say(active === "manual" ? "Voeg eerst een artikel toe." : "Voeg eerst screenshots toe.");
+      return;
+    }
+    if (container.querySelector('[data-busy="1"]')) {
+      say("Even wachten tot alle screenshots zijn gelezen.");
+      return;
+    }
+
+    var lijst = [], energie = 0, filament = 0;
+    Array.prototype.forEach.call(container.children, function (el, i) {
+      var art = el.querySelector(".f-art").value.trim() || (fallback + (i + 1));
       var gram = num(el.querySelector(".f-gram").value);
       var uur = num(el.querySelector(".f-uur").value);
-      if (gram > 0 || uur > 0) heeftInvoer = true;
       var e = uur * KW * PRIJS_KWH;
       var f = gram / 1000 * PRIJS_KG;
       energie += e; filament += f;
       lijst.push({ art: art, prijs: e + f });
     });
 
-    var totaal = energie + filament;
-    var prijs = totaal * OPSLAG;
-
     var label = lijst.length === 1 ? "Artikel" : "Artikelen";
-    var html = "<p class=\"line\"><strong>Naam:</strong> " + esc(naam) + "</p><p class=\"line\"><strong>" + label + ":</strong></p><ul>";
+    var html = '<p class="line"><strong>Naam:</strong> ' + esc(naam) + '</p><p class="line"><strong>' + label + ':</strong></p><ul>';
     lijst.forEach(function (x) { html += "<li>" + esc(x.art) + " (" + eur(x.prijs) + ")</li>"; });
-    html += "</ul><p class=\"line\"><strong>Kosten:</strong></p>" +
+    html += '</ul><p class="line"><strong>Kosten:</strong></p>' +
       '<div class="cost"><span>Energie</span><span>' + eur(energie) + "</span></div>" +
       '<div class="cost"><span>Filament</span><span>' + eur(filament) + "</span></div>" +
-      '<div class="cost total"><span>Totaal</span><span>' + eur(totaal) + "</span></div>" +
-      '<div class="cost prijs"><span>Prijs</span><span>' + eur(prijs) + "</span></div>";
+      '<div class="cost total"><span>Totaal</span><span>' + eur(energie + filament) + "</span></div>";
 
     $("result").innerHTML = html;
     $("result").hidden = false;
@@ -137,17 +352,11 @@
     lijst.forEach(function (x) { tekst += "* " + x.art + " (" + eur(x.prijs) + ")\n"; });
     tekst += "\nKosten:\nEnergie: " + eur(energie) +
              "\nFilament: " + eur(filament) +
-             "\nTotaal: " + eur(totaal) +
-             "\nPrijs: " + eur(prijs) + "\n";
-
-    // Alleen mailen bij ingevulde waarden en niet twee keer dezelfde berekening
-    if (heeftInvoer && tekst !== laatsteMail) {
-      laatsteMail = tekst;
-      sendMail(naam, tekst);
-    }
+             "\nTotaal: " + eur(energie + filament) + "\n";
+    sendMail(naam, tekst);
   }
 
-  // E-mail naar jezelf (Web3Forms, gratis) - werkt stil op de achtergrond
+  // E-mail naar jezelf (Web3Forms, gratis), stil op de achtergrond
   function sendMail(naam, tekst) {
     if (!MAIL_KEY) return;
     fetch("https://api.web3forms.com/submit", {
@@ -161,7 +370,6 @@
       })
     }).catch(function () {});
   }
-
   $("calcBtn").addEventListener("click", calc);
 })();
 </script>
